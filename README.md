@@ -5,12 +5,14 @@ A Clojure library for dynamic browsing with cookies for authentication navigatio
 
 [![Clojars Project](http://clojars.org/org.clojars.kokos/browser/latest-version.svg)](http://clojars.org/org.clojars.kokos/browser)
 
-```(use 'browser.core)
+```
+(use 'browser.core)
 
 (def client (create))
 
 (with-client client
-  (doget "https://github.com/kokosro/browse"))```
+  (doget "https://github.com/kokosro/browse"))
+```
 
 will produce a response map
 
