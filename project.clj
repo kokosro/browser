@@ -1,4 +1,4 @@
-(defproject org.clojars.kokos/browser "0.2.0"
+(defproject org.clojars.kokos/browser "0.2.1"
   :description "Basic HTTP client utility. With cookie store for authenticated navigation. "
   :url "https://github.com/kokosro/browser"
   :license {:name "Eclipse Public License"

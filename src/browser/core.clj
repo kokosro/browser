@@ -57,7 +57,7 @@
 
 
 
-(defn execute-request [& {:keys [url scope  method params headers]
+(defn- execute-request [& {:keys [url scope  method params headers]
                           :or {method :get
                                params nil
                                scope (clj-http.cookies/cookie-store)
@@ -73,6 +73,39 @@
                                             {:form-params params}
                                             {:body params})))))
     (belt/not-a-valid-url-response url)))
+
+
+(defn- selected-option-value 
+  [options]
+  (reduce (fn [v option]
+            (if (= "selected" (or (-> option :option :value :selected)
+                                  ""))
+              (-> option :option :value :value)))
+          (-> (first options)
+              :option
+              :value
+              :value)
+          options))
+
+(defn- merge-form-element
+  [data element]
+  (merge (assoc {}
+           (keyword (case (first element)
+                      :select (-> element :select :value :name)
+                      (-> element :input :value :name)))
+           (case (first element)
+            :select (selected-option-value (-> element :select :content))
+            (-> element :input :value :value)))
+         data))
+
+(defn- construct-form-data
+  [form data]
+  (reduce (fn [data element]
+            (merge-form-element data element))
+          data
+          (-> form :form :content)))
+
+
 
 
 (defn navigate 
@@ -109,6 +142,18 @@
                 :params params
                 :response response}})))
 
+
+(defn submit-form
+  [state form data]
+  (let [action-url (belt/normalize-url
+                     (-> state :current :url)
+                     (-> form :form :value :action))
+        form-data (construct-form-data form data)
+        method (keyword (s/lower-case 
+                          (or (-> form :form :value :method)
+                                 "GET")))]
+    (navigate state action-url method form-data)))
+
 (defn open 
   ([]
    (open (new-state (clj-http.cookies/cookie-store))))
@@ -121,11 +166,6 @@
                                             (into [state]
                                                   (rest action)))))]
          page)))))
-
-
-
-
-
 
 
 
