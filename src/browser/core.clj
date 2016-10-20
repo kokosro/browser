@@ -1,13 +1,18 @@
 (ns browser.core
-  (:require [clj-http.cookies])
-  (:require [clj-http.client :as client])
-  (:require [uri.core :as u])
-  (:require [clojure.string :as s])
+  (:require [clj-http.cookies]
+            [clj-http.client :as client]
+            [uri.core :as u]
+            [clojure.string :as s]
+            [browser.header :as header]
+            [browser.belt :as belt])
   (:use [slingshot.slingshot :only [try+]])
-  (:require [browser.header :as header])
   (:gen-class))
 
-(defn build-response [url response]
+;;each tab is an agent with private scope
+
+
+(defn- build-response 
+  [url response]
   {:url url
    :url-info (u/uri->map (u/make url))
    :status (:status response)
@@ -19,86 +24,108 @@
    :error 0
    :body (:body response)})
 
-(defn can-fetch-url? [url & {:keys [accepted-schemes] :or {accepted-schemes ["http" "https"]}}]
-  (if (and 
-        (not (= "" url))
-        (not (nil? url))
-        (u/absolute? (u/make url)))
-    (let [url-map (u/uri->map (u/make url))]
-      (reduce (fn [r x]
-                (or r
-                    (= x (:scheme url-map)))) false accepted-schemes))
-    false))
-
-(defn- remove-url-fragments [url]
-  (if-not (nil? url)
-    (first (s/split url #"#"))
-    nil))
-
-(defn normalize-url [base-url url]
-  (if-not (nil? url)
-    (try
-      (let [x (remove-url-fragments (.toString (u/resolve (u/make base-url) (u/make (s/replace url #" " "")))))]
-        (if (can-fetch-url? x)
-          x
-          base-url))
-      (catch Exception e base-url))
-    base-url))
-
-(defn =host? [base-host & urls]
-  (reduce #(let [url-info (u/uri->map (u/make %2))]
-             (and %1 (or (= base-host (:host url-info))
-                         (= base-host (s/replace (:host url-info) #"www\." ""))))) true urls))
-
-
-
-(defn- not-a-valid-url-response [url]
-  {:body ""
-   :error 600
-   :status 0
-   :content-type ""
-   :content-type-info ""
-   :response-time ""
-   :content-size 0
-   :redirects []
-   :url url})
 
 (defn- request-handler [fetching-fn args]
   (let [fetched-response (try+ (let [response (fetching-fn args)] response)
                                (catch Object _ _))]
-    (build-response (:url args) fetched-response)))
-
-(defn create []
-  (let [cookie-store (clj-http.cookies/cookie-store)]
-    (fn [url & {:keys [method params agent headers]
-                :or {method :get
-                     params nil
-                     agent "Simple Browser"
-                     headers {}}}]
-      (if (can-fetch-url? url)
-        (request-handler client/request (merge {:method method
-                                 :url url
-                                 :insecure? true
-                                 :follow-redirects true
-                                 :max-redirects 10
-                                 :socket-timeout 2000 :conn-timeout 2000
-                                 :headers (merge {"User-Agent" agent} headers)}
-                                (if-not (nil? params)
-                                  (if (= :get method)
-                                    {:query-params params}
-                                    {:form-params params}))))
-        (not-a-valid-url-response url)))))
-
-(def ^:dynamic *client* (create))
-
-(defn doget [url & params]
-  (*client* url :method :get :params (first params)))
-(defn dopost [url & params]
-  (*client* url :method :post :params (first params)))
-(defn doreq [url method & params]
-  (*client* url :method (keyword method) :params (first params)))
+    (build-response (:url args) 
+                    fetched-response)))
 
 
-(defmacro with-client [client & body]
-  `(binding [*client* ~client]
-     ~@body))
+
+(defn- merge-default-headers [to]
+  (merge {"User-Agent" "Basic Browker"} 
+         to))
+
+(defn- build-simple-request [url method headers]
+  {:method method
+   :url url
+   :insecure? true
+   :follow-redirects true
+   :max-redirects 10
+   :socket-timeout 2000 :conn-timeout 2000
+   :headers (merge-default-headers headers)})
+
+(defn- new-state
+  [scope]
+  {:scope scope
+   :history []
+   :current {:url nil
+             :method :get
+             :params nil
+             :response (belt/empty-response "")}})
+
+
+
+(defn execute-request [& {:keys [url scope  method params headers]
+                          :or {method :get
+                               params nil
+                               scope (clj-http.cookies/cookie-store)
+                               headers {}}}]
+  (if (belt/fetchable? url)
+    (request-handler client/request (merge 
+                                      {:cookie-store scope}
+                                      (build-simple-request url method headers)
+                                      (if-not (nil? params)
+                                        (if (= :get method)
+                                          {:query-params params}
+                                          (if (map? params)
+                                            {:form-params params}
+                                            {:body params})))))
+    (belt/not-a-valid-url-response url)))
+
+
+(defn navigate 
+  ([state]
+   (navigate state (:url (:current state))
+             (:method (:current state))
+             (:params (:current state))))
+  ([state to-url]
+   (navigate state to-url :get))
+  ([state to-url method]
+   (navigate state to-url method nil))
+  ([state to-url method params]
+   (let [history (concat (:history state) 
+                         [(:current state)])
+         url (if (nil? (-> state :current :url))
+               to-url
+               (belt/normalize-url (-> state
+                                       :current
+                                       :url) 
+                                   to-url))
+         
+         response (try
+                    (execute-request
+                      :url url
+                      :method method
+                      :params params
+                      :scope (:scope state))
+                    (catch Exception e (do (println e)
+                                         nil)))]
+     {:scope (:scope state)
+      :history history
+      :current {:url url
+                :method method
+                :params params
+                :response response}})))
+
+(defn open 
+  ([]
+   (open (new-state (clj-http.cookies/cookie-store))))
+  ([state]
+   (fn [& action]
+     (if (nil? (first action))
+       state
+       (let [page (promise)
+             _ (future (deliver page (apply (first action)
+                                            (into [state]
+                                                  (rest action)))))]
+         page)))))
+
+
+
+
+
+
+
+
