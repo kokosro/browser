@@ -10,7 +10,6 @@
 
 ;;each tab is an agent with private scope
 
-
 (defn- build-response 
   [url response]
   {:url url
@@ -24,14 +23,11 @@
    :error 0
    :body (:body response)})
 
-
 (defn- request-handler [fetching-fn args]
   (let [fetched-response (try+ (let [response (fetching-fn args)] response)
                                (catch Object _ _))]
     (build-response (:url args) 
                     fetched-response)))
-
-
 
 (defn- merge-default-headers [to]
   (merge {"User-Agent" "Basic Browker"} 
@@ -55,13 +51,11 @@
              :params nil
              :response (belt/empty-response "")}})
 
-
-
 (defn- execute-request [& {:keys [url scope  method params headers]
-                          :or {method :get
-                               params nil
-                               scope (clj-http.cookies/cookie-store)
-                               headers {}}}]
+                           :or {method :get
+                                params nil
+                                scope (clj-http.cookies/cookie-store)
+                                headers {}}}]
   (if (belt/fetchable? url)
     (request-handler client/request (merge 
                                       {:cookie-store scope}
@@ -73,7 +67,6 @@
                                             {:form-params params}
                                             {:body params})))))
     (belt/not-a-valid-url-response url)))
-
 
 (defn- selected-option-value 
   [options]
@@ -89,14 +82,18 @@
 
 (defn- merge-form-element
   [data element]
-  (merge (assoc {}
-           (keyword (case (first element)
-                      :select (-> element :select :value :name)
-                      (-> element :input :value :name)))
-           (case (first element)
-            :select (selected-option-value (-> element :select :content))
-            (-> element :input :value :value)))
-         data))
+  (let [field-name (case (first element)
+                     :select (-> element :select :value :name)
+                     (-> element :input :value :name))]
+    (if (and (not (nil? field-name))
+             (not (= "" (s/trim field-name))))
+      (merge (assoc {}
+               (keyword field-name)
+               (case (first element)
+                 :select (selected-option-value (-> element :select :content))
+                 (-> element :input :value :value)))
+             data)
+      data)))
 
 (defn- construct-form-data
   [form data]
@@ -104,9 +101,6 @@
             (merge-form-element data element))
           data
           (-> form :form :content)))
-
-
-
 
 (defn navigate 
   ([state]
@@ -126,7 +120,6 @@
                                        :current
                                        :url) 
                                    to-url))
-         
          response (try
                     (execute-request
                       :url url
@@ -142,7 +135,6 @@
                 :params params
                 :response response}})))
 
-
 (defn submit-form
   [state form data]
   (let [action-url (belt/normalize-url
@@ -151,7 +143,7 @@
         form-data (construct-form-data form data)
         method (keyword (s/lower-case 
                           (or (-> form :form :value :method)
-                                 "GET")))]
+                              "GET")))]
     (navigate state action-url method form-data)))
 
 (defn follow-link
@@ -159,11 +151,10 @@
   (let [action-url (belt/normalize-url
                      (-> state :current :url)
                      (-> link
-                          :url
-                          :value
-                          :link))]
+                         :url
+                         :value
+                         :link))]
     (navigate state action-url :get params)))
-
 
 (defn open 
   ([]
@@ -176,8 +167,8 @@
              ;;no more future for the time being, just return, don't reliver
              _ 0]
          (apply (first action)
-                                            (into [state]
-                                                  (rest action)))
+                (into [state]
+                      (rest action)))
          ;page
          )))))
 
