@@ -161,11 +161,8 @@
                      (-> link
                           :url
                           :value
-                          :link))
-        part (partial navigate state action-url :get)]
-    (if-not (nil? params)
-      (part params)
-      (part))))
+                          :link))]
+    (navigate state action-url :get params)))
 
 
 (defn open 
