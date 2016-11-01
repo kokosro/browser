@@ -154,6 +154,20 @@
                                  "GET")))]
     (navigate state action-url method form-data)))
 
+(defn follow-link
+  [state link params]
+  (let [action-url (belt/normalize-url
+                     (-> state :current :url)
+                     (-> link
+                          :url
+                          :value
+                          :link))
+        part (partial navigate state action-url :get)]
+    (if-not (nil? params)
+      (part params)
+      (part))))
+
+
 (defn open 
   ([]
    (open (new-state (clj-http.cookies/cookie-store))))
