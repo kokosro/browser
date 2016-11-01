@@ -1,6 +1,6 @@
 # browser
 
-A Clojure library for dynamic browsing with cookies for authentication navigation
+A Clojure library for dynamic browsing with cookies for authenticated navigation
 ## Usage
 
 [![Clojars Project](http://clojars.org/org.clojars.kokos/browser/latest-version.svg)](http://clojars.org/org.clojars.kokos/browser)
