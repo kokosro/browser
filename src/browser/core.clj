@@ -134,7 +134,7 @@
                       :params params
                       :scope (:scope state))
                     (catch Exception e (do (println e)
-                                         nil)))]
+                                         {:error e})))]
      {:scope (:scope state)
       :history history
       :current {:url url
@@ -173,10 +173,13 @@
      (if (nil? (first action))
        state
        (let [page (promise)
-             _ (future (deliver page (apply (first action)
+             ;;no more future for the time being, just return, don't reliver
+             _ 0]
+         (apply (first action)
                                             (into [state]
-                                                  (rest action)))))]
-         page)))))
+                                                  (rest action)))
+         ;page
+         )))))
 
 
 
