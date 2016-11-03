@@ -58,7 +58,8 @@
                                 headers {}}}]
   (if (belt/fetchable? url)
     (request-handler client/request (merge 
-                                      {:cookie-store scope}
+                                      {:cookie-store scope
+                                       :cookie-policy (constantly nil)}
                                       (build-simple-request url method headers)
                                       (if-not (nil? params)
                                         (if (= :get method)
